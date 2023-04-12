@@ -1,0 +1,216 @@
+# Turorial
+https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-nats-on-ubuntu-16-04
+
+# login to server
+ssh root@[ip]
+
+# download nats [NATS STREAMING SERVER]
+wget https://github.com/nats-io/nats-streaming-server/releases/download/v0.21.2/nats-streaming-server-v0.21.2-linux-amd64.zip
+
+>>> ls -A
+
+# install unzip
+sudo apt-get install -y unzip
+
+# unzip nats-streaming-server
+unzip nats-streaming-server-v0.21.2-linux-amd64.zip
+
+>>> ls -A
+
+# copy [out] the server file to same directory and rename it 
+sudo cp nats-streaming-server-v0.21.2-linux-amd64/nats-streaming-server gnatsd
+
+>>> ls -A
+
+# make gnatsd an executable file
+chmod +x gnatsd
+
+# start the server
+./gnatsd --addr 127.0.0.1 --port 4222
+
+[you should get information on the server]
+
+# stop the server
+CTRL + C
+
+# create bin folder for nats
+sudo mkdir -p /srv/nats/bin
+
+# move gnatsd to the bin folder
+sudo mv ~/gnatsd /srv/nats/bin
+
+# create config folder for nats
+sudo nano /srv/nats/gnatsd.config
+
+# paste the code below into the file [don't copy the lines]
+------------
+port: 4222
+net: '127.0.0.1'
+------------
+
+# run the server again to ensure it is working
+/srv/nats/bin/gnatsd -c /srv/nats/gnatsd.config
+
+[you should get information on the server]
+
+# create service user and group
+sudo adduser --system --group --no-create-home --shell /bin/false nats
+
+# change the owner of /srv directory to nats user and group
+sudo chown -R nats:nats /srv
+
+TO RUN NATS AS A SERVICE
+
+# create and open the service file
+sudo nano /etc/systemd/system/nats.service
+
+# paste code below into the file [don't copy the lines]
+--------------
+[Unit]
+Description=NATS messaging server
+
+[Service]
+ExecStart=/srv/nats/bin/gnatsd -c /srv/nats/gnatsd.config
+User=nats
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+-----------
+
+# start the service
+sudo systemctl start nats
+
+# ping the server. You should get a 'PONG' message
+printf "PING\r\n" | nc 127.0.0.1 4222
+
+# enable the service
+sudo systemctl enable nats
+
+TO SECURE CONNECTIONS
+
+# make private file
+mkdir ~/priv
+
+# generate a self-signed certificate
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+-keyout priv/gnatsd.key -out priv/gnatsd.crt \
+-subj "/C=US/ST=Texas/L=Austin/O=AwesomeThings/CN=www.example.com"
+
+# move private folder into nats folder
+sudo mv ~/priv /srv/nats
+
+# make private folder accessible to nats user and group
+sudo chmod 440 /srv/nats/priv/*
+sudo chmod 550 /srv/nats/priv
+sudo chown -R nats:nats /srv/nats/priv
+
+# update nats config file
+sudo nano /srv/nats/gnatsd.config
+
+# paste the code below in the file [don't copy the lines]
+------------
+#tls {
+#  cert_file: "/srv/nats/priv/gnatsd.crt"
+#  key_file: "/srv/nats/priv/gnatsd.key"
+#  timeout: 1
+#}
+------------
+
+# close the editor and restart nats
+sudo systemctl restart nats
+
+# PING the server [you should get a PONG message]
+printf "PING\r\n" | nc localhost 4222
+
+CONFIGURE NATS for authorization
+
+# open nats config file
+sudo nano /srv/nats/gnatsd.config
+
+# paste the code below
+---------------
+streaming:{
+    cluster_id: [give a name here]
+}
+
+# authorization {
+#  user: user1
+#  password: pass1
+#}
+------------
+
+# close the file and run the code below
+sudo chown nats /srv/nats/gnatsd.config
+sudo chmod 400 /srv/nats/gnatsd.config
+
+# restart nats
+sudo systemctl restart nats
+
+# PING the server [you should get a PONG message]
+printf "PING\r\n" | nc localhost 4222
+
+MAKE NATS ACCESSIBLE EVERYWHERE
+
+# open nats config file
+sudo nano /srv/nats/gnatsd.config
+
+# Change the [net] line to
+---------------
+net: '0.0.0.0'
+------------
+
+# restart nats
+sudo systemctl restart nats
+
+INSTALL NGINX
+
+# update
+sudo apt-get update
+
+# Install nginx
+sudo apt-get install nginx
+
+# enable firewall
+sudo ufw enable
+
+# allow nginx
+sudo ufw allow 'Nginx Full'
+
+# update nginx config
+sudo nano /etc/nginx/sites-available/default
+
+# update the server_name line with the ip of your droplet
+server_name [ip];
+
+# close file and restart nginx
+sudo nginx -t
+sudo systemctl reload nginx
+
+PORT FOWARDING [remember that nats run on port 4222 by default]
+
+sudo ufw allow 4222/tcp
+sudo ufw allow ssh
+
+# open firewall files
+sudo nano /etc/ufw/before.rules
+
+# paste the code below just above the *filter line
+------------------
+*nat
+:PREROUTING ACCEPT [0:0]
+-A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 4222
+COMMIT
+----------------
+
+# restart firewall
+sudo ufw disable
+sudo ufw enable
+
+
+CONGRATULATIONS!!!! YOU have deployed nats server on ubuntu
+open your browser and paste your IP address.
+
+
+
+

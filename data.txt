@@ -1,0 +1,75 @@
+IP: 157.245.216.127
+Private IP: 
+
+User GROUP:
+username: user1
+pwd: pass1
+
+#nats download ## check latest here [https://github.com/nats-io/nats-server]
+wget https://github.com/nats-io/nats-server/releases/download/v2.2.4/nats-server-v2.2.4-linux-amd64.zip
+wget https://github.com/nats-io/nats-streaming-server/releases/download/v0.21.2/nats-streaming-server-v0.21.2-linux-amd64.zip
+
+#unzip
+unzip nats-server-v2.2.4-linux-amd64.zip
+unzip nats-streaming-server-v0.21.2-linux-amd64.zip
+
+#copy to same directory and rename
+sudo cp nats-server-v2.2.4-linux-amd64/nats-server gnatsd
+sudo cp nats-streaming-server-v0.21.2-linux-amd64/nats-streaming-server gnatsd
+
+#names --file
+nats-server
+nats-streaming-server
+
+#names --folder
+nats
+nats-streaming
+
+#crontab example
+*/1 * * * * bash /root/publish_load_average.sh
+
+#use netfilter-persistent in place of iptables-persistent
+
+#get private IP
+ifconfig -a
+
+Note: eth0 is public and eth1 is private
+
+
+#tls {
+#  cert_file: "/srv/nats/priv/gnatsd.crt"
+#  key_file: "/srv/nats/priv/gnatsd.key"
+#  timeout: 1
+#}
+
+# authorization {
+#  user: user1
+#  password: pass1
+#}
+
+# add a configuration block to nats server
+streaming:{
+    cluster_id: [give a name here]
+}
+
+# to dump all events, restart the nats server
+sudo systemctl restart nats
+
+#config nginx
+sudo nano /etc/nginx/sites-available/default
+sudo nginx -t
+sudo systemctl reload nginx
+
+#port forward with ufw
+sudo ufw allow 4222/tcp
+sudo ufw allow ssh
+
+sudo nano /etc/ufw/before.rules
+
+*nat
+:PREROUTING ACCEPT [0:0]
+-A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 4222
+COMMIT
+
+sudo ufw disable
+sudo ufw enable
